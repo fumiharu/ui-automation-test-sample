@@ -119,7 +119,7 @@ def main():
     if not args.dry_run and (not github_token or not asana_token or not repo_name or not pr_number):
         print("Missing environment variables (GITHUB_TOKEN, ASANA_ACCESS_TOKEN, GITHUB_REPOSITORY, PR_NUMBER)")
         sys.exit(1)
-        
+
     # Load Config (Graceful)
     config = load_config(args.config)
 
@@ -183,7 +183,6 @@ def main():
     # Construct Comment
     # Handle None body
     safe_body = pr_body if pr_body else ""
-
     comment_text = (
         f"Pull Request merged: {pr_title}\n"
         f"URL: {pr_html_url}\n"
@@ -214,9 +213,8 @@ def main():
         else:
             try:
                 body = {"data": {"text": comment_text}}
-                # Pass opts={} as required by the library signature,
-                # but if there are other options they should go to kwargs.
-                stories_api.create_story_for_task(body=body, task_gid=task_id, opts={})
+                # Use positional arguments: (body, task_gid, opts)
+                stories_api.create_story_for_task(body, task_id, {})
                 print(f"Comment posted to task {task_id}")
             except ApiException as e:
                 print(f"Exception when calling StoriesApi->create_story_for_task: {e}")
@@ -235,8 +233,8 @@ def main():
             else:
                 try:
                     # Fetch current task to get html_notes
-                    # Pass opt_fields as keyword argument, separate from opts={}
-                    task_response = tasks_api.get_task(task_gid=task_id, opts={}, opt_fields="html_notes")
+                    # Use positional arguments: (task_gid, opts)
+                    task_response = tasks_api.get_task(task_id, {'opt_fields': "html_notes"})
 
                     if hasattr(task_response, 'data'):
                         current_html = task_response.data.html_notes
@@ -253,8 +251,8 @@ def main():
                         new_html = append_to_html_notes(current_html, append_html)
 
                         body = {"data": {"html_notes": new_html}}
-                        # Pass opts={} as required
-                        tasks_api.update_task(body=body, task_gid=task_id, opts={})
+                        # Use positional arguments: (body, task_gid, opts)
+                        tasks_api.update_task(body, task_id, {})
                         print(f"Description updated for task {task_id}")
                 except ApiException as e:
                     print(f"Exception when calling TasksApi->update_task: {e}")
