@@ -119,7 +119,7 @@ def main():
     if not args.dry_run and (not github_token or not asana_token or not repo_name or not pr_number):
         print("Missing environment variables (GITHUB_TOKEN, ASANA_ACCESS_TOKEN, GITHUB_REPOSITORY, PR_NUMBER)")
         sys.exit(1)
-
+        
     # Load Config (Graceful)
     config = load_config(args.config)
 
@@ -183,6 +183,7 @@ def main():
     # Construct Comment
     # Handle None body
     safe_body = pr_body if pr_body else ""
+
     comment_text = (
         f"Pull Request merged: {pr_title}\n"
         f"URL: {pr_html_url}\n"
