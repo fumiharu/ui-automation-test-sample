@@ -49,7 +49,7 @@ def get_matching_rules(changed_files, config):
     # Handle case where config might be None or empty dict
     if not config:
         return []
-
+      
     for rule in config.get('rules', []):
         team = rule.get('team')
         paths = rule.get('paths', [])
