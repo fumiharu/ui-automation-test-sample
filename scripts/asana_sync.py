@@ -15,9 +15,18 @@ def parse_args():
     return parser.parse_args()
 
 def load_config(config_path):
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-        return config if config else {}
+    # Handle missing file gracefully
+    if not os.path.exists(config_path):
+        print(f"Warning: Config file '{config_path}' not found. Skipping description updates.")
+        return {}
+
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+            return config if config else {}
+    except Exception as e:
+        print(f"Warning: Error loading config file '{config_path}': {e}. Skipping description updates.")
+        return {}
 
 def get_asana_urls(pr_body):
     """
@@ -49,7 +58,7 @@ def get_matching_rules(changed_files, config):
     # Handle case where config might be None or empty dict
     if not config:
         return []
-      
+
     for rule in config.get('rules', []):
         team = rule.get('team')
         paths = rule.get('paths', [])
@@ -83,6 +92,21 @@ def get_task_id_from_url(url):
 
     return None
 
+def append_to_html_notes(current_html, append_text_html):
+    """
+    Appends HTML content to the existing Asana html_notes.
+    Asana html_notes are wrapped in <body>...</body>.
+    """
+    if not current_html:
+        return f"<body>{append_text_html}</body>"
+
+    # Insert before closing </body> tag if exists
+    if "</body>" in current_html:
+        return current_html.replace("</body>", f"{append_text_html}</body>")
+    else:
+        # Fallback if no body tag found (unlikely for Asana HTML)
+        return current_html + append_text_html
+
 def main():
     args = parse_args()
 
@@ -95,16 +119,9 @@ def main():
     if not args.dry_run and (not github_token or not asana_token or not repo_name or not pr_number):
         print("Missing environment variables (GITHUB_TOKEN, ASANA_ACCESS_TOKEN, GITHUB_REPOSITORY, PR_NUMBER)")
         sys.exit(1)
-
-    # Load Config
-    try:
-        config = load_config(args.config)
-    except Exception as e:
-        print(f"Error loading config: {e}")
-        # If config is critical, exit. But user said file exists.
-        # If parsing fails, we might want to stop description updates but continue commenting?
-        # For now, let's treat config load error as fatal for simplicity or just empty.
-        sys.exit(1)
+        
+    # Load Config (Graceful)
+    config = load_config(args.config)
 
     # --- GitHub Operations ---
     if args.dry_run:
@@ -164,13 +181,16 @@ def main():
     matched_rules = get_matching_rules(changed_files, config)
 
     # Construct Comment
+    # Handle None body
+    safe_body = pr_body if pr_body else ""
+
     comment_text = (
         f"Pull Request merged: {pr_title}\n"
         f"URL: {pr_html_url}\n"
         f"Author: {pr_user_login}\n"
         f"Branch: {pr_head_ref} -> {pr_base_ref}\n"
         f"\n"
-        f"{pr_body}" # Including body as requested
+        f"{safe_body}"
     )
 
     # --- Asana Operations ---
@@ -194,46 +214,47 @@ def main():
         else:
             try:
                 body = {"data": {"text": comment_text}}
-                # Use keyword arguments for safety
-                stories_api.create_story_for_task(body=body, task_gid=task_id)
+                # Pass opts={} as required by the library signature,
+                # but if there are other options they should go to kwargs.
+                stories_api.create_story_for_task(body=body, task_gid=task_id, opts={})
                 print(f"Comment posted to task {task_id}")
             except ApiException as e:
                 print(f"Exception when calling StoriesApi->create_story_for_task: {e}")
 
-        # 2. Update Description
+        # 2. Update Description (HTML)
         if matched_rules:
             updates = []
             for rule in matched_rules:
-                updates.append(f"担当チーム: {rule['team']}\n{rule['text']}")
+                updates.append(f"<strong>担当チーム: {rule['team']}</strong><br>{rule['text']}")
 
-            append_text = "\n\n" + "\n\n".join(updates)
+            append_html = "<br><br>" + "<br><br>".join(updates)
 
             if args.dry_run:
-                print(f"[DRY-RUN] Would append to description of task {task_id}:")
-                print(f"---\n{append_text}\n---")
+                print(f"[DRY-RUN] Would append HTML to description of task {task_id}:")
+                print(f"---\n{append_html}\n---")
             else:
                 try:
-                    # Fetch current task to get description
-                    # Use keyword arguments
-                    task_response = tasks_api.get_task(task_gid=task_id, opt_fields=["notes"])
+                    # Fetch current task to get html_notes
+                    # Pass opt_fields as keyword argument, separate from opts={}
+                    task_response = tasks_api.get_task(task_gid=task_id, opts={}, opt_fields="html_notes")
 
                     if hasattr(task_response, 'data'):
-                        current_notes = task_response.data.notes
+                        current_html = task_response.data.html_notes
                     else:
-                        current_notes = getattr(task_response, 'notes', '')
+                        current_html = getattr(task_response, 'html_notes', '')
 
-                    if current_notes is None:
-                        current_notes = ''
+                    if current_html is None:
+                        current_html = ''
 
-                    # Simple idempotency check to avoid duplicate appends on re-runs
-                    if append_text.strip() in current_notes:
-                        print(f"Description already updated for task {task_id}, skipping update.")
+                    # Simple idempotency check
+                    if append_html in current_html:
+                         print(f"Description already updated for task {task_id}, skipping update.")
                     else:
-                        new_notes = current_notes + append_text
+                        new_html = append_to_html_notes(current_html, append_html)
 
-                        body = {"data": {"notes": new_notes}}
-                        # Use keyword arguments
-                        tasks_api.update_task(body=body, task_gid=task_id)
+                        body = {"data": {"html_notes": new_html}}
+                        # Pass opts={} as required
+                        tasks_api.update_task(body=body, task_gid=task_id, opts={})
                         print(f"Description updated for task {task_id}")
                 except ApiException as e:
                     print(f"Exception when calling TasksApi->update_task: {e}")
