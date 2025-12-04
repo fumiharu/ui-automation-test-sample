@@ -1,0 +1,13 @@
+rules:
+  - team: "Frontend Team"
+    paths:
+      - "frontend/**"
+      - "shared/utils.ts"
+      - "README.md"
+    text: "UIまたはドキュメントの変更が含まれます。デザイン崩れがないか確認してください。"
+
+  - team: "Backend Team"
+    paths:
+      - "backend/**"
+      - "api/schema.graphql"
+    text: "バックエンドロジックへの影響を確認してください。"
