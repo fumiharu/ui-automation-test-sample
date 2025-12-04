@@ -1,4 +1,4 @@
-asana==5.2.2
-PyGithub==2.8.1
-PyYAML==6.0.3
-pathspec==0.12.1
+asana>=5.2.2
+PyGithub>=2.5.0
+PyYAML>=6.0.1
+pathspec>=0.12.1

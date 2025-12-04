@@ -4,7 +4,7 @@ import sys
 import yaml
 import argparse
 import pathspec
-from github import Github
+from github import Github, Auth
 import asana
 from asana.rest import ApiException
 
@@ -16,7 +16,8 @@ def parse_args():
 
 def load_config(config_path):
     with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+        return config if config else {}
 
 def get_asana_urls(pr_body):
     """
@@ -45,6 +46,10 @@ def get_matching_rules(changed_files, config):
     """
     matched_rules = []
 
+    # Handle case where config might be None or empty dict
+    if not config:
+        return []
+      
     for rule in config.get('rules', []):
         team = rule.get('team')
         paths = rule.get('paths', [])
@@ -96,6 +101,9 @@ def main():
         config = load_config(args.config)
     except Exception as e:
         print(f"Error loading config: {e}")
+        # If config is critical, exit. But user said file exists.
+        # If parsing fails, we might want to stop description updates but continue commenting?
+        # For now, let's treat config load error as fatal for simplicity or just empty.
         sys.exit(1)
 
     # --- GitHub Operations ---
@@ -117,7 +125,8 @@ def main():
         print(f"[DRY-RUN] PR Body: {pr_body}")
         print(f"[DRY-RUN] Changed Files: {changed_files}")
     else:
-        g = Github(github_token)
+        auth = Auth.Token(github_token)
+        g = Github(auth=auth)
         repo = g.get_repo(repo_name)
         pr = repo.get_pull(int(pr_number))
 
@@ -184,9 +193,9 @@ def main():
             print(f"---\n{comment_text}\n---")
         else:
             try:
-                # Correct order: (task_gid, body, ...)
                 body = {"data": {"text": comment_text}}
-                stories_api.create_story_for_task(task_id, body)
+                # Use keyword arguments for safety
+                stories_api.create_story_for_task(body=body, task_gid=task_id)
                 print(f"Comment posted to task {task_id}")
             except ApiException as e:
                 print(f"Exception when calling StoriesApi->create_story_for_task: {e}")
@@ -205,7 +214,8 @@ def main():
             else:
                 try:
                     # Fetch current task to get description
-                    task_response = tasks_api.get_task(task_id, opt_fields=["notes"])
+                    # Use keyword arguments
+                    task_response = tasks_api.get_task(task_gid=task_id, opt_fields=["notes"])
 
                     if hasattr(task_response, 'data'):
                         current_notes = task_response.data.notes
@@ -215,12 +225,16 @@ def main():
                     if current_notes is None:
                         current_notes = ''
 
-                    new_notes = current_notes + append_text
+                    # Simple idempotency check to avoid duplicate appends on re-runs
+                    if append_text.strip() in current_notes:
+                        print(f"Description already updated for task {task_id}, skipping update.")
+                    else:
+                        new_notes = current_notes + append_text
 
-                    body = {"data": {"notes": new_notes}}
-                    # Correct order: (task_gid, body, ...)
-                    tasks_api.update_task(task_id, body)
-                    print(f"Description updated for task {task_id}")
+                        body = {"data": {"notes": new_notes}}
+                        # Use keyword arguments
+                        tasks_api.update_task(body=body, task_gid=task_id)
+                        print(f"Description updated for task {task_id}")
                 except ApiException as e:
                     print(f"Exception when calling TasksApi->update_task: {e}")
 
