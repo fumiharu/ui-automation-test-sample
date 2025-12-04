@@ -1,13 +1,25 @@
 rules:
-  - team: "Frontend Team"
+  - team: "Group"
     paths:
-      - "frontend/**"
-      - "shared/utils.ts"
-      - "README.md"
-    text: "UIまたはドキュメントの変更が含まれます。デザイン崩れがないか確認してください。"
+      - "Group/**"
+    text: "Group への影響を確認"
 
-  - team: "Backend Team"
+  - team: "Image"
     paths:
-      - "backend/**"
-      - "api/schema.graphql"
-    text: "バックエンドロジックへの影響を確認してください。"
+      - "Message/Image/**"
+    text: "Image への影響を確認"
+    
+  - team: "Gif"
+    paths:
+      - "Message/Image/Gif/**"
+    text: "Gif への影響を確認"
+        
+  - team: "Text"
+    paths:
+      - "Message/Text/Text"
+    text: "Text への影響を確認"
+            
+  - team: "Texts"
+    paths:
+      - "Message/Text/Texts"
+    text: "Texts への影響を確認"
