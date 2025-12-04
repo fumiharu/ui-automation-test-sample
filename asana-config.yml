@@ -1,0 +1,25 @@
+rules:
+  - team: "Group"
+    paths:
+      - "Group/**"
+    text: "Group への影響を確認"
+
+  - team: "Image"
+    paths:
+      - "Message/Image/**"
+    text: "Image への影響を確認"
+    
+  - team: "Gif"
+    paths:
+      - "Message/Image/Gif/**"
+    text: "Gif への影響を確認"
+        
+  - team: "Text"
+    paths:
+      - "Message/Text/Text"
+    text: "Text への影響を確認"
+            
+  - team: "Texts"
+    paths:
+      - "Message/Text/Texts"
+    text: "Texts への影響を確認"
